@@ -5,7 +5,7 @@ export const METALS_INTERVAL = 60_000; // live metal quotes
 export const FX_INTERVAL = 5 * 60_000; // FX sources only change daily; 5 min is plenty
 export const HISTORY_INTERVAL = 6 * 60 * 60_000; // charts & 7-day trend
 export const FORCE_COOLDOWN = 10_000; // "Refresh now" cooldown
-export const REQUEST_TIMEOUT = 10_000;
+export const REQUEST_TIMEOUT = 6_000; // a hung source must not hold up the others
 
 export const METALS = [
   { code: 'XAU', sym: 'Au', name: 'Gold', nameAr: 'ذهب', tint: '#E8B54A' },

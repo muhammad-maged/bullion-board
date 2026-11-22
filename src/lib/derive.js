@@ -94,7 +94,7 @@ const RANGE_DAYS = { '1W': 7, '1M': 31, '1Y': 366 };
  * Gold chart series for the selected karat, in the chosen currency per gram.
  * Historical points use today's USD/EGP rate (the free history feed is USD only).
  */
-export function goldChart({ range, goldHistory, goldIntraday, daily, metals, fx, currency, purity, premium = 0, now = Date.now() }) {
+export function goldChart({ range, goldHistory, goldIntraday, goldSamples = [], fallbackHistory = [], daily, metals, fx, currency, purity, premium = 0, now = Date.now() }) {
   const mult = (1 + (Number(premium) || 0) / 100) * purity;
   const usdEgp = fx?.usdEgp;
   const toVal = (usdOz) => {
@@ -103,17 +103,20 @@ export function goldChart({ range, goldHistory, goldIntraday, daily, metals, fx,
   };
   let pts = [];
   if (range === '1D') {
-    pts = goldIntraday.filter((p) => p.t >= now - 26 * 3600_000);
+    const since = now - 26 * 3600_000;
+    pts = goldIntraday.filter((p) => p.t >= since);
+    if (pts.length < 3) pts = goldSamples.filter((p) => p.t >= since); // prices recorded by this page
   } else {
     const from = now - RANGE_DAYS[range] * 86_400_000;
     pts = goldHistory.filter((p) => p.t >= from);
-    if (pts.length < 3 && range === '1W') {
+    if (pts.length < 3) pts = fallbackHistory.filter((p) => p.t >= from);
+    if (pts.length < 3) {
       pts = daily.filter((d) => d.metals?.XAU).map((d) => ({ t: Date.parse(d.date), usdOz: d.metals.XAU.usdOz }));
     }
   }
   const out = pts.map((p) => ({ t: p.t, v: toVal(p.usdOz) })).filter((p) => Number.isFinite(p.v));
   const live = metals.XAU;
-  if (live && out.length && (!out.length || live.at > out[out.length - 1].t)) {
+  if (live && out.length && live.at > out[out.length - 1].t + 1000) {
     const v = toVal(live.usdOz);
     if (Number.isFinite(v)) out.push({ t: live.at ?? now, v });
   }

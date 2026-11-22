@@ -44,8 +44,12 @@ export default function App() {
   const sel = k.karats.find((x) => x.id === s.karat) ?? k.karats[2];
   const chart = useMemo(
     () => goldChart({ ...p, range: s.range, currency, purity: sel.purity, premium: s.premium }),
-    [p.goldHistory, p.goldIntraday, p.daily, p.metals, p.fx, s.range, currency, sel.purity, s.premium] // eslint-disable-line
+    [p.goldHistory, p.goldIntraday, p.goldSamples, p.fallbackHistory, p.daily, p.metals, p.fx, s.range, currency, sel.purity, s.premium] // eslint-disable-line
   );
+  const { ensureHistory } = p;
+  useEffect(() => {
+    ensureHistory(s.range);
+  }, [s.range, ensureHistory]);
 
   const money = (v, c = currency) => fmtMoney(v, c);
   const gold = rows.find((r) => r.code === 'XAU');
@@ -114,6 +118,7 @@ export default function App() {
           </div>
           <AreaChart
             points={chart}
+            emptyText={s.range === '1D' ? 'Collecting today’s prices — the 1D chart fills in while the page is open' : 'Loading chart history…'}
             label={`Gold ${sel.label} per gram, ${s.range}`}
             format={(v) => money(v)}
             timeFormat={(t) =>

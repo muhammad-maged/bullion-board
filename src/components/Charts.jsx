@@ -22,7 +22,7 @@ export function Sparkline({ data, color, width = 120, height = 44, strokeWidth =
 }
 
 /** Area chart with a hover / touch tooltip. points: [{t, v}] */
-export function AreaChart({ points, format, color = '#E8B54A', label, timeFormat }) {
+export function AreaChart({ points, format, color = '#E8B54A', label, timeFormat, emptyText = 'Chart data unavailable right now' }) {
   const W = 640;
   const H = 190;
   const ref = useRef(null);
@@ -35,7 +35,7 @@ export function AreaChart({ points, format, color = '#E8B54A', label, timeFormat
     return { xy, line, area: line + ` L${W} ${H} L0 ${H} Z`, min: Math.min(...vals), max: Math.max(...vals) };
   }, [points]);
 
-  if (!geo) return <div className="chart-empty">Chart data unavailable right now</div>;
+  if (!geo) return <div className="chart-empty" style={{ padding: 16, textAlign: 'center' }}>{emptyText}</div>;
 
   const onMove = (e) => {
     const r = ref.current.getBoundingClientRect();

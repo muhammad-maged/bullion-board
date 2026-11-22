@@ -11,6 +11,7 @@ import {
 import { FORCE_COOLDOWN, FX_INTERVAL, HISTORY_INTERVAL, METALS, METALS_INTERVAL } from '../lib/constants.js';
 
 const STORE_KEY = 'bullion-board.snapshot.v1';
+const SAMPLES_KEY = 'bullion-board.gold-samples.v1';
 const DAY = 86_400_000;
 
 function loadSnapshot() {
@@ -68,6 +69,41 @@ export function usePrices() {
   const fawazRef = useRef(fawazLatest);
   fawazRef.current = fawazLatest;
 
+  const live = useRef({ goldApi: {}, xaus: null });
+  const [goldSamples, setGoldSamples] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem(SAMPLES_KEY) || '[]');
+    } catch {
+      return [];
+    }
+  });
+  const [fallbackHistory, setFallbackHistory] = useState([]);
+  const dayCache = useRef(new Map()); // 'YYYY-MM-DD' -> fawaz day
+
+  // Merge whatever live sources answered so far with the daily backup, and show it.
+  const applyMerged = useCallback((fw) => {
+    const merged = mergeMetals(live.current.goldApi, live.current.xaus, fw ?? fawazRef.current);
+    if (!Object.keys(merged).length) return;
+    setMetals(merged);
+    setLastUpdated(Date.now());
+    setFromCache(false);
+    const g = merged.XAU;
+    if (g?.live) {
+      setGoldSamples((prev) => {
+        const cutoff = Date.now() - 26 * 3600_000;
+        const last = prev[prev.length - 1];
+        if (last && Date.now() - last.t < 30_000) return prev; // one sample per refresh
+        const nextS = [...prev.filter((x) => x.t >= cutoff), { t: Date.now(), usdOz: g.usdOz }].slice(-2000);
+        try {
+          localStorage.setItem(SAMPLES_KEY, JSON.stringify(nextS));
+        } catch {
+          /* ignore */
+        }
+        return nextS;
+      });
+    }
+  }, []);
+
   const mark = (key, ok, error = null) =>
     setStatus((s) => ({ ...s, [key]: { ok, at: ok ? Date.now() : s[key].at, error: error ? String(error.message || error) : null } }));
 
@@ -78,7 +114,11 @@ export function usePrices() {
       const [er, fw] = await Promise.allSettled([fetchErApi({ bust }), fetchFawaz('latest', { bust })]);
       mark('erApi', er.status === 'fulfilled', er.reason);
       mark('fawaz', fw.status === 'fulfilled', fw.reason);
-      if (fw.status === 'fulfilled') setFawazLatest(fw.value);
+      if (fw.status === 'fulfilled') {
+        setFawazLatest(fw.value);
+        fawazRef.current = fw.value;
+        applyMerged(fw.value);
+      }
       if (er.status === 'fulfilled') setFx({ ...er.value, source: 'erApi' });
       else if (fw.status === 'fulfilled') setFx({ usdEgp: fw.value.usdEgp, usdEur: fw.value.usdEur, at: fw.value.at, source: 'fawaz' });
       return fw.status === 'fulfilled' ? fw.value : null;
@@ -86,35 +126,41 @@ export function usePrices() {
       inFlight.current.fx = false;
       next.current.fx = Date.now() + FX_INTERVAL;
     }
-  }, []);
+  }, [applyMerged]);
 
-  const loadMetals = useCallback(async (bust = false, fawazOverride) => {
+  const loadMetals = useCallback(async (bust = false) => {
     if (inFlight.current.metals) return;
     inFlight.current.metals = true;
     try {
       const codes = METALS.map((m) => m.code);
-      const [xausRes, ...gaRes] = await Promise.allSettled([
-        fetchXausSpot({ bust }),
-        ...codes.map((c) => fetchGoldApi(c, { bust })),
-      ]);
-      const goldApi = {};
-      gaRes.forEach((r, i) => {
-        if (r.status === 'fulfilled') goldApi[codes[i]] = r.value;
+      const ga = Promise.allSettled(codes.map((c) => fetchGoldApi(c, { bust }))).then((res) => {
+        const goldApi = {};
+        res.forEach((r, i) => {
+          if (r.status === 'fulfilled') goldApi[codes[i]] = r.value;
+        });
+        const ok = Object.keys(goldApi).length > 0;
+        mark('goldApi', ok, ok ? null : res.find((r) => r.status === 'rejected')?.reason);
+        live.current.goldApi = goldApi;
+        applyMerged();
       });
-      const gaOk = Object.keys(goldApi).length > 0;
-      mark('goldApi', gaOk, gaOk ? null : gaRes.find((r) => r.status === 'rejected')?.reason);
-      mark('xaus', xausRes.status === 'fulfilled', xausRes.reason);
-      const merged = mergeMetals(goldApi, xausRes.status === 'fulfilled' ? xausRes.value : null, fawazOverride ?? fawazRef.current);
-      if (Object.keys(merged).length) {
-        setMetals(merged);
-        setLastUpdated(Date.now());
-        setFromCache(false);
-      }
+      const xa = fetchXausSpot({ bust }).then(
+        (v) => {
+          mark('xaus', true);
+          live.current.xaus = v;
+          applyMerged();
+        },
+        (e) => {
+          mark('xaus', false, e);
+          live.current.xaus = null;
+          applyMerged();
+        }
+      );
+      await Promise.all([ga, xa]);
     } finally {
       inFlight.current.metals = false;
       next.current.metals = Date.now() + METALS_INTERVAL;
     }
-  }, []);
+  }, [applyMerged]);
 
   const loadHistory = useCallback(async (bust = false) => {
     if (inFlight.current.history) return;
@@ -144,8 +190,7 @@ export function usePrices() {
     async (bust) => {
       setBusy(true);
       try {
-        const fw = await loadFx(bust);
-        await Promise.all([loadMetals(bust, fw ?? undefined), loadHistory(bust)]);
+        await Promise.all([loadFx(bust), loadMetals(bust), loadHistory(bust)]);
       } finally {
         setBusy(false);
       }
@@ -182,6 +227,32 @@ export function usePrices() {
     saveSnapshot({ metals, fx, fawazLatest, daily, goldHistory, goldIntraday, lastUpdated });
   }, [metals, fx, fawazLatest, daily, goldHistory, goldIntraday, lastUpdated]);
 
+  /** Make sure the chart has data for a range; uses the daily backup when the live history feed is down. */
+  const ensureHistory = useCallback(
+    async (range) => {
+      if (range === '1D') return;
+      const days = range === '1W' ? 8 : range === '1M' ? 31 : 365;
+      const from = Date.now() - days * DAY;
+      if (goldHistory.length > 2 && goldHistory[0].t <= from + 2 * DAY) return; // live feed covers it
+      const step = range === '1Y' ? 7 : 1;
+      const dates = [];
+      for (let i = 1; i <= days; i += step) dates.push(isoDay(Date.now() - i * DAY));
+      const missing = dates.filter((d) => !dayCache.current.has(d));
+      // fetch in small batches to stay polite to the CDN
+      for (let i = 0; i < missing.length; i += 8) {
+        const batch = missing.slice(i, i + 8);
+        const res = await Promise.allSettled(batch.map((d) => fetchFawaz(d)));
+        res.forEach((r, j) => dayCache.current.set(batch[j], r.status === 'fulfilled' ? r.value : null));
+      }
+      const pts = [...dayCache.current.values()]
+        .filter((d) => d?.metals?.XAU)
+        .map((d) => ({ t: Date.parse(d.date), usdOz: d.metals.XAU.usdOz }))
+        .sort((a, b) => a.t - b.t);
+      setFallbackHistory(pts);
+    },
+    [goldHistory]
+  );
+
   const forceRefresh = useCallback(() => {
     if (Date.now() < cooldownUntil || busy) return;
     setCooldownUntil(Date.now() + FORCE_COOLDOWN);
@@ -196,6 +267,9 @@ export function usePrices() {
     daily,
     goldHistory,
     goldIntraday,
+    goldSamples,
+    fallbackHistory,
+    ensureHistory,
     status,
     lastUpdated,
     fromCache,
