@@ -64,3 +64,17 @@ test('real fixture end to end', () => {
   for (const r of rows) assert.ok(r.value > 0, r.code);
   console.log('fixture', fw.date, rows.map((r) => `${r.code} ${r.value.toFixed(2)} EGP/g`).join(' | '), 'USD/EGP', fw.usdEgp.toFixed(2));
 });
+
+test('unit switch applies to karats and chart', () => {
+  const metals = { XAU: { usdOz: 3110.34768, live: true, at: Date.now() } };
+  const fx = { usdEgp: 50, usdEur: 0.9, at: Date.now() };
+  const g = karatPrices({ metals, fx, daily: [], currency: 'EGP', unit: 'g' });
+  const kg = karatPrices({ metals, fx, daily: [], currency: 'EGP', unit: 'kg' });
+  const oz = karatPrices({ metals, fx, daily: [], currency: 'EGP', unit: 'oz' });
+  assert.equal(Math.round(kg.karats[0].price), Math.round(g.karats[0].price * 1000));
+  assert.equal(Math.round(oz.karats[0].price), Math.round(3110.34768 * 50));
+  assert.equal(Math.round(kg.pound), Math.round(g.pound)); // gold pound is a fixed 8 g coin
+  const daily = [{ date: '2026-11-17', usdEgp: 50, usdEur: 0.9, metals: { XAU: { usdOz: 3000 } } }];
+  const c = goldChart({ unit: 'kg', range: '1W', goldHistory: [], goldIntraday: [], daily, metals, fx, currency: 'EGP', purity: 1 });
+  assert.equal(Math.round(c[c.length - 1].v), Math.round(g.karats[0].price * 1000));
+});

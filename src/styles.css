@@ -106,7 +106,7 @@ a:hover { color: #f5cd75; }
 .karat:hover { border-color: #4a3b17; }
 .karat[aria-pressed='true'] { border-color: var(--gold); background: #17140c; }
 .karat .k { font-size: 13px; font-weight: 600; color: var(--gold); }
-.karat .p { font-size: 22px; font-weight: 600; }
+.karat .p { font-size: clamp(17px, 4.6vw, 22px); font-weight: 600; overflow-wrap: anywhere; }
 
 .premium { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
 .premium input { width: 76px; height: 40px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface-2); color: var(--text); font: 600 14px var(--display); padding: 0 10px; }

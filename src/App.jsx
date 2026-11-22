@@ -39,12 +39,12 @@ export default function App() {
   const state = !hasData ? 'off' : anyLive && !p.fromCache ? 'live' : 'delayed';
 
   const rows = useMemo(() => metalRows({ ...p, unit, currency, now: p.now }), [p.metals, p.fx, p.daily, unit, currency]); // eslint-disable-line
-  const k = useMemo(() => karatPrices({ ...p, currency, premium: s.premium }), [p.metals, p.fx, p.daily, currency, s.premium]); // eslint-disable-line
+  const k = useMemo(() => karatPrices({ ...p, currency, unit, premium: s.premium }), [p.metals, p.fx, p.daily, currency, unit, s.premium]); // eslint-disable-line
   const fx = useMemo(() => fxCards(p), [p.fx, p.daily]); // eslint-disable-line
   const sel = k.karats.find((x) => x.id === s.karat) ?? k.karats[2];
   const chart = useMemo(
-    () => goldChart({ ...p, range: s.range, currency, purity: sel.purity, premium: s.premium }),
-    [p.goldHistory, p.goldIntraday, p.goldSamples, p.fallbackHistory, p.daily, p.metals, p.fx, s.range, currency, sel.purity, s.premium] // eslint-disable-line
+    () => goldChart({ ...p, unit, range: s.range, currency, purity: sel.purity, premium: s.premium }),
+    [p.goldHistory, p.goldIntraday, p.goldSamples, p.fallbackHistory, p.daily, p.metals, p.fx, s.range, currency, unit, sel.purity, s.premium] // eslint-disable-line
   );
   const { ensureHistory } = p;
   useEffect(() => {
@@ -103,11 +103,11 @@ export default function App() {
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <span className="dot" style={{ background: 'var(--gold)', width: 10, height: 10 }} />
                 <span style={{ fontWeight: 600, fontSize: 15 }}>Gold {sel.label}</span>
-                <span className="lbl">per gram · Egypt</span>
+                <span className="lbl">per {unitLabel} · Egypt</span>
               </div>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
                 <span className="num big">{hasData && p.fx ? money(sel.price) : <Skel w="7ch" />}</span>
-                <span className="muted" style={{ fontSize: 15 }}>/ g</span>
+                <span className="muted" style={{ fontSize: 15 }}>/ {unit}</span>
               </div>
               <Change value={k.change} suffix="vs yesterday" />
             </div>
@@ -119,7 +119,7 @@ export default function App() {
           <AreaChart
             points={chart}
             emptyText={s.range === '1D' ? 'Collecting today’s prices — the 1D chart fills in while the page is open' : 'Loading chart history…'}
-            label={`Gold ${sel.label} per gram, ${s.range}`}
+            label={`Gold ${sel.label} per ${unitLabel}, ${s.range}`}
             format={(v) => money(v)}
             timeFormat={(t) =>
               s.range === '1D'
@@ -128,7 +128,7 @@ export default function App() {
             }
           />
           <div className="tiles">
-            <div className="tile"><span className="lbl">24K / gram</span><span className="num" style={{ fontSize: 20, fontWeight: 600 }}>{money(k.karats[0].price)}</span></div>
+            <div className="tile"><span className="lbl">24K / {unitLabel}</span><span className="num" style={{ fontSize: 20, fontWeight: 600 }}>{money(k.karats[0].price)}</span></div>
             <div className="tile"><span className="lbl">Gold pound · 8 g 21K</span><span className="num" style={{ fontSize: 20, fontWeight: 600 }}>{money(k.pound)}</span></div>
             <div className="tile"><span className="lbl">World spot · USD/oz</span><span className="num" style={{ fontSize: 20, fontWeight: 600 }}>{fmtMoney(gold?.usdOz, 'USD', 2)}</span></div>
             <div className="tile"><span className="lbl">USD → EGP used</span><span className="num" style={{ fontSize: 20, fontWeight: 600 }}>{fmtNum(p.fx?.usdEgp, 2)}</span></div>
@@ -138,7 +138,7 @@ export default function App() {
         <div className="card narrow" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <div className="card-head" style={{ marginBottom: 0 }}>
             <h2>Egypt gold by karat</h2>
-            <span className="faint" style={{ fontSize: 13 }}>{currency} per gram</span>
+            <span className="faint" style={{ fontSize: 13 }}>{currency} per {unitLabel}</span>
           </div>
           <div className="karat-grid">
             {k.karats.map((x) => (
@@ -263,8 +263,8 @@ export default function App() {
           </div>
           <div className="ratio-bar"><div style={{ width: `${ratio ? Math.min(100, (ratio / 125) * 100) : 0}%` }} /></div>
           <div className="tiles" style={{ marginTop: 4 }}>
-            <div className="tile"><span className="lbl">Silver / g</span><span className="num" style={{ fontSize: 18, fontWeight: 600 }}>{money(convert(silver?.usdOz, { unit: 'g', currency, usdEgp: p.fx?.usdEgp }))}</span></div>
-            <div className="tile"><span className="lbl">Silver 925 / g</span><span className="num" style={{ fontSize: 18, fontWeight: 600 }}>{money((convert(silver?.usdOz, { unit: 'g', currency, usdEgp: p.fx?.usdEgp }) ?? NaN) * 0.925)}</span></div>
+            <div className="tile"><span className="lbl">Silver / {unit}</span><span className="num" style={{ fontSize: 18, fontWeight: 600 }}>{money(convert(silver?.usdOz, { unit, currency, usdEgp: p.fx?.usdEgp }))}</span></div>
+            <div className="tile"><span className="lbl">Silver 925 / {unit}</span><span className="num" style={{ fontSize: 18, fontWeight: 600 }}>{money((convert(silver?.usdOz, { unit, currency, usdEgp: p.fx?.usdEgp }) ?? NaN) * 0.925)}</span></div>
           </div>
         </div>
       </section>

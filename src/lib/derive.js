@@ -51,21 +51,22 @@ export function metalRows({ metals, fx, daily, unit, currency, now = Date.now() 
   });
 }
 
-/** Egyptian karat prices per gram (spot-derived), with an optional local premium %. */
-export function karatPrices({ metals, fx, daily, currency, premium = 0, now = Date.now() }) {
+/** Egyptian karat prices per chosen unit (spot-derived), with an optional local premium %. */
+export function karatPrices({ metals, fx, daily, currency, unit = 'g', premium = 0, now = Date.now() }) {
   const gold = metals.XAU;
   const mult = 1 + (Number(premium) || 0) / 100;
   const usdEgp = fx?.usdEgp;
-  const base = convert(gold?.usdOz, { unit: 'g', currency, usdEgp });
+  const base = convert(gold?.usdOz, { unit, currency, usdEgp });
+  const perGram = convert(gold?.usdOz, { unit: 'g', currency, usdEgp });
   const prev = prevDaily(daily, refDate(gold, now));
-  const prevBase = prev?.metals?.XAU ? convert(prev.metals.XAU.usdOz, { unit: 'g', currency, usdEgp: prev.usdEgp }) : null;
+  const prevBase = prev?.metals?.XAU ? convert(prev.metals.XAU.usdOz, { unit, currency, usdEgp: prev.usdEgp }) : null;
   const change = pctChange(base, prevBase);
   const karats = KARATS.map((k) => ({
     ...k,
     price: Number.isFinite(base) ? base * k.purity * mult : null,
     change,
   }));
-  const pound = Number.isFinite(base) ? base * GOLD_POUND.purity * GOLD_POUND.grams * mult : null;
+  const pound = Number.isFinite(perGram) ? perGram * GOLD_POUND.purity * GOLD_POUND.grams * mult : null;
   return { karats, pound, change };
 }
 
@@ -91,14 +92,14 @@ export function fxCards({ fx, daily, now = Date.now() }) {
 const RANGE_DAYS = { '1W': 7, '1M': 31, '1Y': 366 };
 
 /**
- * Gold chart series for the selected karat, in the chosen currency per gram.
+ * Gold chart series for the selected karat, in the chosen currency and unit.
  * Historical points use today's USD/EGP rate (the free history feed is USD only).
  */
-export function goldChart({ range, goldHistory, goldIntraday, goldSamples = [], fallbackHistory = [], daily, metals, fx, currency, purity, premium = 0, now = Date.now() }) {
+export function goldChart({ unit = 'g', range, goldHistory, goldIntraday, goldSamples = [], fallbackHistory = [], daily, metals, fx, currency, purity, premium = 0, now = Date.now() }) {
   const mult = (1 + (Number(premium) || 0) / 100) * purity;
   const usdEgp = fx?.usdEgp;
   const toVal = (usdOz) => {
-    const v = convert(usdOz, { unit: 'g', currency, usdEgp });
+    const v = convert(usdOz, { unit, currency, usdEgp });
     return Number.isFinite(v) ? v * mult : null;
   };
   let pts = [];
